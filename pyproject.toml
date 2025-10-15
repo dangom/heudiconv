@@ -26,7 +26,6 @@ classifiers = [
 ]
 dependencies = [
     "dcmstack>=0.8",
-    "etelemetry",
     "filelock>=3.0.12",
     "nibabel>=5.3.1",
     "nipype>=1.2.3",

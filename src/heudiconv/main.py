@@ -354,13 +354,6 @@ def workflow(
     outdir = op.abspath(outdir)
 
     latest = None
-    try:
-        import etelemetry
-
-        latest = etelemetry.get_project("nipy/heudiconv")
-    except Exception as e:
-        lgr.warning("Could not check for version updates: %s", str(e))
-
     lgr.info(
         INIT_MSG(
             packname=__packagename__,

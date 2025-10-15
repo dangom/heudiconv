@@ -25,7 +25,6 @@ REQUIRES = [
     # not usable in some use cases since might be just a downloader, not binary
     # 'dcm2niix',
     "dcmstack>=0.8",
-    "etelemetry",
     "filelock>=3.0.12",
     "nibabel>=5.3.1",
     "nipype >=1.2.3",

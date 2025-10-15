@@ -340,13 +340,6 @@ def test_cache(tmp_path: Path) -> None:
     assert cols[26] == "time"
 
 
-def test_no_etelemetry() -> None:
-    # smoke test at large - just verifying that no crash if no etelemetry
-    # must not fail if etelemetry no found
-    with patch.dict("sys.modules", {"etelemetry": None}):
-        workflow(outdir="/dev/null", command="ls", heuristic="reproin", files=[])
-
-
 # Test two scenarios:
 # -study without sessions
 # -study with sessions
