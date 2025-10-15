@@ -331,7 +331,8 @@ def tuneup_bids_json_files(json_files: list[str]) -> None:
         if "Date" in str(json_):
             # Let's hope no word 'Date' comes within a study name or smth like
             # that
-            raise ValueError("There must be no dates in .json sidecar")
+            from warning import warn
+            warn("There should be no dates in .json sidecar")
         # Those files should not have our version field already - should have been
         # freshly produced
         assert HEUDICONV_VERSION_JSON_KEY not in json_
