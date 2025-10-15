@@ -11,13 +11,13 @@ import re
 import shutil
 import sys
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import filelock
 from nipype import Node
 from nipype.interfaces.base import TraitListObject
 
-from .bids import (
+from heudiconv.bids import (
     BIDS_VERSION,
     BIDSError,
     add_participant_record,
@@ -27,13 +27,13 @@ from .bids import (
     save_scans_key,
     tuneup_bids_json_files,
 )
-from .dicoms import (
+from heudiconv.dicoms import (
     compress_dicoms,
     embed_metadata_from_dicoms,
     group_dicoms_into_seqinfos,
 )
-from .due import Doi, due
-from .utils import (
+from heudiconv.due import Doi, due
+from heudiconv.utils import (
     SeqInfo,
     TempDirs,
     assure_no_file_exists,
@@ -70,7 +70,7 @@ def conversion_info(
     outdir: str,
     info: dict[tuple[str, tuple[str, ...], None], list],
     filegroup: dict[str, list[str]],
-    ses: Optional[str],
+    ses: str | None,
 ) -> list[tuple[str, tuple[str, ...], list[str]]]:
     convert_info: list[tuple[str, tuple[str, ...], list[str]]] = []
     for key, items in info.items():
@@ -329,7 +329,7 @@ def update_complex_name(metadata: dict[str, Any], filename: str) -> str:
         return filename
 
     # Check to see if it is magnitude or phase part:
-    img_type = cast(List[str], metadata.get("ImageType", []))
+    img_type = cast(list[str], metadata.get("ImageType", []))
     if "M" in img_type:
         mag_or_phase = "mag"
     elif "P" in img_type:
@@ -853,7 +853,7 @@ def filter_partial_volumes(
     nii_files: list[str],
     bids_files: list[str],
     bids_metas: list[dict[str, Any]],
-) -> Tuple[list[str] | str, list[str] | str, list[Any] | Any]:
+) -> tuple[list[str] | str, list[str] | str, list[Any] | Any]:
     """filter interrupted 4D scans volumes with missing slices on XA: see dcm2niix #742
 
     Parameters
@@ -910,7 +910,7 @@ def filter_partial_volumes(
 def save_converted_files(
     res: Node,
     item_dicoms: list[str],
-    bids_options: Optional[str],
+    bids_options: str | None,
     outtype: str,
     prefix: str,
     outname_bids: str,
@@ -946,7 +946,7 @@ def save_converted_files(
     bids_files = res.outputs.bids
 
     if not len(res_files):
-        lgr.debug("DICOMs {} were not converted".format(item_dicoms))
+        lgr.debug(f"DICOMs {item_dicoms} were not converted")
         return []
 
     if isdefined(res.outputs.bvecs) and isdefined(res.outputs.bvals):
@@ -1097,13 +1097,13 @@ def save_converted_files(
             # Write the files needed:
             safe_movefile(fl, outfile, overwrite)
             if bids_file:
-                outname_bids_file = "%s.json" % (outname)
+                outname_bids_file = f"{outname}.json"
                 safe_movefile(bids_file, outname_bids_file, overwrite)
                 bids_outfiles.append(outname_bids_file)
 
     # res_files is not a list
     else:
-        outname = "{}.{}".format(prefix, outtype)
+        outname = f"{prefix}.{outtype}"
         safe_movefile(res_files, outname, overwrite)
         if bids_files:
             try:
