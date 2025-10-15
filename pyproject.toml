@@ -37,9 +37,6 @@ dependencies = [
 [tool.hatch.version]
 source = "vcs"
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
 [tool.hatch.build.hooks.vcs]
 version-file = "src/heudiconv/_version.py"
 
