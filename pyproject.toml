@@ -33,6 +33,29 @@ dependencies = [
     "pydicom>=1.0.0",
 ]
 
+# Hatchling configuration
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/heudiconv/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/heudiconv"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/docs",
+    "/README.rst",
+    "/COPYING",
+    "/pyproject.toml",
+]
+
+
 [project.optional-dependencies]
 tests = [
     "pytest",
@@ -63,27 +86,7 @@ Repository = "https://github.com/nipy/heudiconv"
 heudiconv = "heudiconv.cli.run:main"
 heudiconv_monitor = "heudiconv.cli.monitor:main"
 
-# Hatchling configuration
-[tool.hatch.version]
-source = "vcs"
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/heudiconv/_version.py"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/heudiconv"]
-
-[tool.hatch.build.targets.sdist]
-include = [
-    "/src",
-    "/docs",
-    "/README.rst",
-    "/COPYING",
-    "/pyproject.toml",
-]
 
 # Pixi configuration - MINIMAL
 [tool.pixi.project]
