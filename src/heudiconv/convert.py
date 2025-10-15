@@ -449,7 +449,8 @@ def update_multiecho_name(
     ]
     for label in entities_after_echo:
         if (label == filetype) or (label in filename):
-            filename = filename.replace(label, "_echo-%s%s" % (echo_number, label))
+            new_label = f"_echo-{echo_number:02d}{label}"
+            filename = filename.replace(label, new_label)
             break
 
     return filename
