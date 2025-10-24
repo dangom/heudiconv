@@ -13,8 +13,8 @@ import sys
 from types import ModuleType
 from typing import Optional
 
-from .dicoms import group_dicoms_into_seqinfos
-from .utils import SeqInfo, StudySessionInfo, TempDirs, docstring_parameter
+from heudiconv.dicoms import group_dicoms_into_seqinfos
+from heudiconv.utils import SeqInfo, StudySessionInfo, TempDirs, docstring_parameter
 
 lgr = logging.getLogger(__name__)
 tempdirs = TempDirs()
