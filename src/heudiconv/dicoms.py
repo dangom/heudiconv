@@ -89,11 +89,11 @@ def create_seqinfo(
     # parse DICOM for seqinfo fields
     TR = get_typed_attr(dcminfo, "RepetitionTime", float, -1000) / 1000
     if TR < 0:
-        if mw.is_multiframe and hasattr(wrapper, "frames"):
-        try:
-            TR = float(mw.shared[0x0018, 0x9115][0][0x0018, 0x0080].value)
-        except Exception as e:
-            pass
+        if mw.is_multiframe and hasattr(mw, "frames"):
+            try:
+                TR = float(mw.shared[0x0018, 0x9115][0][0x0018, 0x0080].value)
+            except Exception as e:
+                pass
     TE = get_typed_attr(dcminfo, "EchoTime", float, -1)
     if TE < 0:
         if mw.is_multiframe and hasattr(mw, "frames"):
