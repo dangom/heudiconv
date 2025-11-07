@@ -426,28 +426,123 @@ def get_known_heuristic_names() -> list[str]:
 
 
 def load_heuristic(heuristic: str) -> ModuleType:
-    """Load heuristic from the file, return the module"""
+    """Load heuristic from the file or module, return the module"""
     if os.path.sep in heuristic or os.path.lexists(heuristic):
-        heuristic_file = op.realpath(heuristic)
-        path, fname = op.split(heuristic_file)
-        try:
-            old_syspath = sys.path[:]
-            sys.path.insert(0, path)
-            mod = __import__(fname.split(".")[0])
-            mod.filename = heuristic_file  # type: ignore[attr-defined]
-        finally:
-            sys.path = old_syspath
+        heuristic_path = op.realpath(heuristic)
+        
+        # Check if it's a directory (module)
+        if op.isdir(heuristic_path):
+            # It's a module directory
+            path = heuristic_path
+            module_name = op.basename(heuristic_path)
+            try:
+                old_syspath = sys.path[:]
+                sys.path.insert(0, op.dirname(heuristic_path))
+                mod = __import__(module_name)
+                # Mark this as a module-based heuristic
+                mod.filename = op.join(heuristic_path, "__init__.py")  # type: ignore[attr-defined]
+                mod._is_module_heuristic = True  # type: ignore[attr-defined]
+            finally:
+                sys.path = old_syspath
+        else:
+            # It's a single file
+            heuristic_file = heuristic_path
+            path, fname = op.split(heuristic_file)
+            try:
+                old_syspath = sys.path[:]
+                sys.path.insert(0, path)
+                mod = __import__(fname.split(".")[0])
+                mod.filename = heuristic_file  # type: ignore[attr-defined]
+            finally:
+                sys.path = old_syspath
     else:
         from importlib import import_module
 
+        # First try to import as a regular module (not from heudiconv.heuristics)
         try:
-            mod = import_module("heudiconv.heuristics.%s" % heuristic)
-            assert mod.__file__ is not None
-            # remove c or o from pyc/pyo
-            mod.filename = mod.__file__.rstrip("co")  # type: ignore[attr-defined]
-        except Exception as exc:
-            raise ImportError("Failed to import heuristic %s: %s" % (heuristic, exc))
+            mod = import_module(heuristic)
+            # Mark this as a module-based heuristic since it's imported by name
+            mod._is_module_heuristic = True  # type: ignore[attr-defined]
+            # Set filename for compatibility
+            if hasattr(mod, '__file__') and mod.__file__:
+                mod.filename = mod.__file__.rstrip("co")  # type: ignore[attr-defined]
+            else:
+                # Module might not have __file__ (e.g., namespace packages)
+                mod.filename = f"<module:{heuristic}>"  # type: ignore[attr-defined]
+            lgr.info("Loaded heuristic module: %s", heuristic)
+        except ImportError:
+            # Fall back to trying heudiconv.heuristics
+            try:
+                mod = import_module("heudiconv.heuristics.%s" % heuristic)
+                assert mod.__file__ is not None
+                # remove c or o from pyc/pyo
+                mod.filename = mod.__file__.rstrip("co")  # type: ignore[attr-defined]
+            except Exception as exc:
+                raise ImportError("Failed to import heuristic %s: %s" % (heuristic, exc))
     return mod
+
+
+def serialize_heuristic(mod: ModuleType) -> str:
+    """
+    Serialize a heuristic module into a single Python file string.
+    
+    This extracts the key heuristic functions and combines them into
+    a single file format for checkpointing purposes.
+    
+    Parameters
+    ----------
+    mod : ModuleType
+        The loaded heuristic module
+        
+    Returns
+    -------
+    str
+        Python code as a string containing all heuristic functions
+    """
+    import inspect
+    
+    # List of known heuristic functions/attributes to extract
+    heuristic_names = [
+        'create_key',
+        'custom_callable', 
+        'custom_seqinfo',
+        'filter_dicom',
+        'filter_files',
+        'grouping',
+        'infotodict',
+        'infotoids',
+        'ls',
+        'DEFAULT_FIELDS',
+        'POPULATE_INTENDED_FOR_OPTS',
+        'scaninfo_suffix',
+    ]
+    
+    lines = []
+    lines.append('"""Inlined heuristic from module"""')
+    lines.append('')
+    
+    # Add imports that are commonly needed
+    lines.append('from __future__ import annotations')
+    lines.append('')
+    
+    # Extract and serialize each function/attribute
+    for name in heuristic_names:
+        if hasattr(mod, name):
+            obj = getattr(mod, name)
+            if callable(obj) and not isinstance(obj, type):
+                # It's a function - get its source
+                try:
+                    source = inspect.getsource(obj)
+                    lines.append(source)
+                    lines.append('')
+                except (OSError, TypeError):
+                    lgr.warning(f"Could not extract source for {name}")
+            elif not callable(obj):
+                # It's a variable/constant
+                lines.append(f'{name} = {repr(obj)}')
+                lines.append('')
+    
+    return '\n'.join(lines)
 
 
 def get_heuristic_description(name: str, full: bool = False) -> str:

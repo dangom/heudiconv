@@ -210,7 +210,15 @@ def prep_conversion(
         # (since no sample data to test on etc)
     else:
         assure_no_file_exists(target_heuristic_filename)
-        safe_copyfile(heuristic.filename, target_heuristic_filename)
+        # Check if this is a module-based heuristic that needs inlining
+        if getattr(heuristic, '_is_module_heuristic', False):
+            from heudiconv.utils import serialize_heuristic
+            lgr.info("Inlining module-based heuristic into single file")
+            serialized_content = serialize_heuristic(heuristic)
+            with open(target_heuristic_filename, 'w') as f:
+                f.write(serialized_content)
+        else:
+            safe_copyfile(heuristic.filename, target_heuristic_filename)
         if dicoms:
             seqinfo = group_dicoms_into_seqinfos(
                 dicoms,

@@ -13,3 +13,4 @@ sample_nifti.json
 venvs/
 .pixi/
 pixi.lock
+.aider*
