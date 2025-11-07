@@ -38,12 +38,14 @@ from heudiconv.utils import (
     TempDirs,
     assure_no_file_exists,
     clear_temp_dicoms,
+    copy_heuristic_lock_file,
     file_md5sum,
     load_json,
     read_config,
     safe_copyfile,
     safe_movefile,
     save_json,
+    serialize_heuristic,
     set_readonly,
     treat_infofile,
     write_config,
@@ -187,15 +189,42 @@ def prep_conversion(
     #  1. add a test
     #  2. possibly extract into a dedicated function for easier logic flow here
     #     and a dedicated unittest
+    heuristic_changed = False
     if op.exists(target_heuristic_filename) and file_md5sum(
         target_heuristic_filename
     ) != file_md5sum(heuristic.filename):
-        # remake conversion table
-        reuse_conversion_table = False
+        heuristic_changed = True
         lgr.info(
             "Will not reuse existing conversion table files because heuristic "
             "has changed"
         )
+    
+    # Also check if pixi.lock has changed
+    target_lock_file = op.join(idir, "pixi.lock")
+    if op.exists(target_lock_file):
+        from heudiconv.utils import find_pixi_lock
+        # Find the current pixi.lock for the heuristic
+        source_path = None
+        if hasattr(heuristic, '__file__') and heuristic.__file__:
+            source_path = heuristic.__file__.rstrip('co')
+        elif hasattr(heuristic, '__path__'):
+            paths = list(heuristic.__path__)
+            if paths:
+                source_path = paths[0]
+        
+        if source_path:
+            current_lock = find_pixi_lock(source_path)
+            if current_lock and file_md5sum(target_lock_file) != file_md5sum(current_lock):
+                heuristic_changed = True
+                lgr.info(
+                    "Will not reuse existing conversion table files because "
+                    "pixi.lock has changed"
+                )
+        else:
+            lgr.debug("Could not determine source path to check for pixi.lock changes")
+    
+    if heuristic_changed:
+        reuse_conversion_table = False
 
     info: dict[tuple[str, tuple[str, ...], None], list]
     if reuse_conversion_table:
@@ -212,13 +241,18 @@ def prep_conversion(
         assure_no_file_exists(target_heuristic_filename)
         # Check if this is a module-based heuristic that needs inlining
         if getattr(heuristic, '_is_module_heuristic', False):
-            from heudiconv.utils import serialize_heuristic
+            from heudiconv.utils import copy_heuristic_lock_file, serialize_heuristic
             lgr.info("Inlining module-based heuristic into single file")
             serialized_content = serialize_heuristic(heuristic)
             with open(target_heuristic_filename, 'w') as f:
                 f.write(serialized_content)
+            # Also copy pixi.lock if it exists for reproducibility
+            copy_heuristic_lock_file(heuristic, idir)
         else:
+            from heudiconv.utils import copy_heuristic_lock_file
             safe_copyfile(heuristic.filename, target_heuristic_filename)
+            # Also copy pixi.lock if it exists for reproducibility
+            copy_heuristic_lock_file(heuristic, idir)
         if dicoms:
             seqinfo = group_dicoms_into_seqinfos(
                 dicoms,

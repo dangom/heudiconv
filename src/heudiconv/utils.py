@@ -475,6 +475,45 @@ def load_heuristic(heuristic: str) -> ModuleType:
     return mod
 
 
+def find_pixi_lock(start_path: str) -> Optional[str]:
+    """
+    Find pixi.lock file by traversing up the directory tree from start_path.
+    
+    Parameters
+    ----------
+    start_path : str
+        Starting path (file or directory) to search from
+        
+    Returns
+    -------
+    str or None
+        Path to pixi.lock if found, None otherwise
+    """
+    # Start from the directory containing the file (or the directory itself)
+    if op.isfile(start_path):
+        current = op.dirname(start_path)
+    else:
+        current = start_path
+    
+    current = op.abspath(current)
+    
+    # Traverse up the directory tree
+    while True:
+        pixi_lock_path = op.join(current, "pixi.lock")
+        if op.exists(pixi_lock_path):
+            lgr.debug("Found pixi.lock at %s", pixi_lock_path)
+            return pixi_lock_path
+        
+        parent = op.dirname(current)
+        # Stop if we've reached the root
+        if parent == current:
+            break
+        current = parent
+    
+    lgr.debug("No pixi.lock found for %s", start_path)
+    return None
+
+
 def serialize_heuristic(mod: ModuleType) -> str:
     """
     Serialize a heuristic module into a single Python file string.
@@ -543,6 +582,50 @@ def serialize_heuristic(mod: ModuleType) -> str:
             f"inspect.getsource() failed and no readable __file__ found. "
             f"This heuristic cannot be safely checkpointed."
         )
+
+
+def copy_heuristic_lock_file(mod: ModuleType, target_dir: str) -> None:
+    """
+    Copy pixi.lock file associated with a heuristic to the target directory.
+    
+    This helps ensure reproducibility by capturing the exact dependency
+    versions used by the heuristic. The MD5 sum of this file will be checked
+    on subsequent runs to detect dependency changes.
+    
+    Parameters
+    ----------
+    mod : ModuleType
+        The loaded heuristic module
+    target_dir : str
+        Directory where the lock file should be copied
+    """
+    # Try to find the source file/directory for the heuristic
+    source_path = None
+    
+    if hasattr(mod, '__file__') and mod.__file__:
+        source_path = mod.__file__.rstrip('co')
+    elif hasattr(mod, '__path__'):
+        # For namespace packages, __path__ might be a list
+        paths = list(mod.__path__)
+        if paths:
+            source_path = paths[0]
+    
+    if not source_path:
+        lgr.debug("Cannot determine source path for heuristic module %s", mod.__name__)
+        return
+    
+    # Look for pixi.lock
+    pixi_lock = find_pixi_lock(source_path)
+    
+    if pixi_lock:
+        target_lock = op.join(target_dir, "pixi.lock")
+        try:
+            safe_copyfile(pixi_lock, target_lock, overwrite=True)
+            lgr.info("Copied pixi.lock from %s to %s for reproducibility", pixi_lock, target_lock)
+        except Exception as e:
+            lgr.warning("Failed to copy pixi.lock: %s", e)
+    else:
+        lgr.debug("No pixi.lock found for heuristic, skipping lock file copy")
 
 
 def get_heuristic_description(name: str, full: bool = False) -> str:
