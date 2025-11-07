@@ -493,7 +493,7 @@ def serialize_heuristic(mod: ModuleType) -> str:
         Python code as a string containing all heuristic functions
     """
     import inspect
-    from .. import __version__
+    from heudiconv import __version__
     
     # List of known heuristic functions/attributes to extract
     heuristic_names = [
