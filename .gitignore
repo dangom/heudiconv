@@ -1,0 +1,16 @@
+*.egg-info/
+*.pyc
+.cache/
+.coverage
+.idea/
+.tox/
+.vscode/
+_build/
+_version.py
+build/
+dist/
+sample_nifti.json
+venvs/
+.pixi/
+pixi.lock
+.aider*

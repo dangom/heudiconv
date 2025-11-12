@@ -1,0 +1,46 @@
+context:
+  name: "heudiconv"
+  version: ${{ env.get('GIT_DESCRIBE_TAG') | trim('v') }}${{ ('.post' + env.get('GIT_DESCRIBE_NUMBER') + '+' + env.get('GIT_DESCRIBE_HASH')) if env.get('GIT_DESCRIBE_NUMBER', default='0') != '0' }}
+
+package:
+  name: ${{ name }}
+  version: ${{ version }}
+
+source:
+  path: ../
+
+build:
+  number: 0
+  noarch: python
+  script: python -m pip install . --no-deps --ignore-installed -vv --no-build-isolation --disable-pip-version-check
+
+requirements:
+  host:
+    - python >=3.11,<3.13
+    - pip
+    - wheel
+    - hatchling
+    - hatch-vcs
+    - source
+  run:
+    - python >=3.11,<3.13
+    - dcm2niix >=1.0.20250506,<1.1
+    - nibabel >=5.3.1,<6
+    - pydicom >=2.0.0,<3.0.0
+    - filelock >=3.0.12
+    - dcmstack>=0.8
+
+tests:
+  - python:
+      imports:
+        - heudiconv
+      pip_check: true
+
+about:
+  homepage: https://github.com/virdx/heudiconv
+  license: "Apache 2.0"
+
+extra:
+  recipe-maintainers:
+    - felixknispelVBC
+    - hanayik

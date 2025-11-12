@@ -1,0 +1,28 @@
+name: License Check
+on:
+  workflow_dispatch:
+  push:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref_name == 'main' && github.run_id || '' }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  conda-deny:
+    name: Check License with conda-deny
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - name: setup and use conda-deny
+        uses: virdx/conda-deny-action@main
+        with:
+          platform: linux-64
+          environment: default
+          lockfile: ./pixi.lock

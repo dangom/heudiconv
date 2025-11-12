@@ -1,0 +1,125 @@
+name: Pixi CI pipeline
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+env:
+  ORTHANC_URL: ${{ vars.ORTHANC_URL }}
+  ORTHANC_USERNAME: ${{ vars.ORTHANC_USERNAME }}
+  ORTHANC_PASSWORD: ${{ secrets.ORTHANC_PASSWORD }}
+
+jobs:
+  pytest:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - name: Setup JFrog CLI for virdx conda channel
+        uses: jfrog/setup-jfrog-cli@v4
+        id: artifactory
+        env:
+          JF_URL: https://quantco.jfrog.io
+        with:
+          oidc-provider-name: github-oidc-configuration
+          oidc-audience: jfrog-github
+      - name: Setup pixi Auth
+        run: |
+          pixi auth login https://quantco.jfrog.io --username ${{ steps.artifactory.outputs.oidc-user }} --password ${{ steps.artifactory.outputs.oidc-token }}
+
+      # Testing
+      - name: Run pytest
+        env:
+          BASE_PATH: ./.tmp_base_path
+        run: |
+          mkdir -p ./reports
+          pixi run -e dev test-report
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: ./reports/coverage.json
+      - name: Generate Markdown summary of code coverage
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: ./reports/coverage.xml
+          format: markdown
+          output: both
+          thresholds: "50 50"
+      - name: Add test results to job summary
+        run: |
+          cat ./code-coverage-results.md >> $GITHUB_STEP_SUMMARY
+
+      # Cleanup
+      - name: Clean working directory
+        if: always()
+        run: |
+          git clean -fdx
+          git reset --hard HEAD
+
+  linting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - name: Setup JFrog CLI for virdx conda channel
+        uses: jfrog/setup-jfrog-cli@v4
+        id: artifactory
+        env:
+          JF_URL: https://quantco.jfrog.io
+        with:
+          oidc-provider-name: github-oidc-configuration
+          oidc-audience: jfrog-github
+      - name: Setup pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: v0.40.2
+          cache: true
+          auth-host: https://quantco.jfrog.io
+          auth-username: ${{ steps.artifactory.outputs.oidc-user }}
+          auth-password: ${{ steps.artifactory.outputs.oidc-token }}
+      - name: Run pixi install
+        run: |
+          pixi install -e dev
+      - name: Run ruff
+        run: |
+          pixi run --no-lockfile-update -e dev  lintcheck
+          pixi run --no-lockfile-update -e dev ruff format --check .
+
+  type-checking:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - name: Setup JFrog CLI for virdx conda channel
+        uses: jfrog/setup-jfrog-cli@v4
+        id: artifactory
+        env:
+          JF_URL: https://quantco.jfrog.io
+        with:
+          oidc-provider-name: github-oidc-configuration
+          oidc-audience: jfrog-github
+      - name: Setup pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: v0.40.2
+          cache: true
+          auth-host: https://quantco.jfrog.io
+          auth-username: ${{ steps.artifactory.outputs.oidc-user }}
+          auth-password: ${{ steps.artifactory.outputs.oidc-token }}
+      - name: Run pixi install
+        run: |
+          pixi install -e dev
+      - name: Run mypy
+        run: |
+          pixi run --no-lockfile-update -e dev typecheck

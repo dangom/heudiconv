@@ -1,0 +1,30 @@
+name: Package
+on:
+  workflow_dispatch:
+  push:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.ref_name == 'main' && github.run_id || '' }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    name: Build Conda Package
+    runs-on: ubuntu-latest
+    env:
+      CONDA_OVERRIDE_CUDA: 12.2
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build conda package
+        uses: virdx/rattler-build-action@v0.10.4
+        with:
+          recipe-path: conda.recipe/recipe.yaml
+          upload-artifactory: false
+          channel-name: virdx
