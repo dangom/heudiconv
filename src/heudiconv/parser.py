@@ -203,7 +203,7 @@ def get_study_sessions(
             )
         for sid in sids:
             sdir = dicom_dir_template.format(subject=sid, session=session)
-            for session_, files_ in get_extracted_dicoms(sorted(glob(sdir))):
+            for session_, files_ in get_extracted_dicoms(sorted(glob(sdir, recursive=True))):
                 if session_ is not None and session:
                     lgr.warning(
                         "We had session specified (%s) but while analyzing "
