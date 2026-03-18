@@ -736,27 +736,28 @@ def convert(
     if populate_intended_for_opts is not None:
         # Because fmap files can only be used to correct for distortions in images
         # collected within the same scanning session, find unique subject/session
-        # combinations from the outname in each item:
+        # paths from the outnames in each item.
+        # We extract the session path by finding the portion of each outname up
+        # to (but not including) the BIDS datatype folder (anat/, func/, etc.).
+        # This handles layouts with extra path components (e.g. -b notop adds
+        # "experiment-datasets/") between outdir and the subject folder.
         outnames = [item[0] for item in items]
-        # - grab "sub-<sID>[/ses-<ses>]", and keep only unique ones:
-        sessions: set[str] = set()
+        session_paths: set[str] = set()
+        bids_datatypes = {"anat", "func", "dwi", "fmap", "perf", "meg", "eeg",
+                          "ieeg", "beh", "pet", "micr"}
         for oname in outnames:
-            m = re.search(
-                "sub-(?P<subj>[a-zA-Z0-9]*)([{0}_]ses-(?P<ses>[a-zA-Z0-9]*))?".format(
-                    op.sep
-                ),
-                oname,
-            )
-            if m:
-                sessions.add(m.group(0))
+            parts = oname.replace(op.sep, "/").split("/")
+            for i, part in enumerate(parts):
+                if part in bids_datatypes:
+                    candidate = op.sep.join(parts[:i])
+                    session_paths.add(candidate)
+                    break
             else:
-                # "sub-<sID>[/ses-<ses>]" is not present, so this is not BIDS
-                # compliant and it doesn't make sense to add "IntendedFor":
-                sessions.clear()
+                # No BIDS datatype folder found — not BIDS compliant
+                session_paths.clear()
                 break
 
-        for ses in sessions:
-            session_path = op.join(outdir, ses)
+        for session_path in session_paths:
             populate_intended_for(session_path, **populate_intended_for_opts)
 
 
