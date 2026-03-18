@@ -634,16 +634,14 @@ def get_shim_setting(json_file: str) -> Any:
     """
     data = load_json(json_file)
     try:
-        shims = data[SHIM_KEY]
+        return data[SHIM_KEY]
     except KeyError:
-        lgr.error(
-            'File %s does not have "%s". '
-            'Please use a different "matching_parameters" in your heuristic file',
+        lgr.warning(
+            'File %s does not have "%s" — cannot match by shims',
             json_file,
             SHIM_KEY,
         )
-        raise
-    return shims
+        return None
 
 
 def find_fmap_groups(fmap_dir: str) -> dict[str, list[str]]:
