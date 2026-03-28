@@ -191,8 +191,11 @@ def validate_dicom(
     try:
         protocol_name = mw.dcm_data.ProtocolName
         assert isinstance(protocol_name, str)
-        series_id = (int(mw.dcm_data.SeriesNumber), protocol_name)
-    except AttributeError as e:
+        sn = mw.dcm_data.SeriesNumber
+        if sn is None:
+            raise AttributeError("SeriesNumber is None")
+        series_id = (int(sn), protocol_name)
+    except (AttributeError, TypeError) as e:
         lgr.warning('Ignoring %s since not quite a "normal" DICOM: %s', fl, e)
         return None
     if dcmfilter is not None and dcmfilter(mw.dcm_data):
