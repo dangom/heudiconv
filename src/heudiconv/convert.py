@@ -835,6 +835,19 @@ def convert_dicom(
                 shutil.copyfile(filename, outfile)
 
 
+def _is_unicode_error(exc: BaseException) -> bool:
+    """Check if an exception is or was caused by a UnicodeDecodeError."""
+    if isinstance(exc, UnicodeDecodeError):
+        return True
+    # Nipype wraps errors in NodeExecutionError
+    if exc.__cause__ and isinstance(exc.__cause__, UnicodeDecodeError):
+        return True
+    # Check the string representation as a last resort
+    if "UnicodeDecodeError" in str(exc):
+        return True
+    return False
+
+
 def nipype_convert(
     item_dicoms: list[str],
     prefix: str,
@@ -896,32 +909,20 @@ def nipype_convert(
     convertnode.inputs.bids_format = bids_options is not None
     try:
         eg = convertnode.run()
-    except UnicodeDecodeError:
-        # dcm2niix may output non-UTF-8 characters (e.g. German umlauts from
-        # GE protocol data).  Nipype hardcodes UTF-8 decoding.  Retry with
-        # lenient encoding by monkey-patching the stream reader.
+    except (UnicodeDecodeError, Exception) as _exc:
+        if not _is_unicode_error(_exc):
+            raise
+        # dcm2niix may output non-UTF-8 characters (e.g. German umlauts
+        # in GE protocol data).  Nipype's Stream class hardcodes
+        # locale.getpreferredencoding() (UTF-8) for decoding subprocess
+        # output.  Retry with latin-1 which can decode any byte.
         import nipype.utils.subprocess as _npsub
 
         _orig_encoding = _npsub.Stream.default_encoding
-        _npsub.Stream.default_encoding = "utf-8"
-        # Patch the read method to use errors='replace'
-        _orig_read = _npsub.Stream._read
-
-        def _read_replace(self, drain=0):
-            try:
-                fd = self.fileno
-                buf = os.read(fd, 4096).decode("utf-8", errors="replace")
-                if buf:
-                    self._rows.append(buf)
-                    return buf
-                return None
-            except OSError:
-                return None
-
-        _npsub.Stream._read = _read_replace
+        _npsub.Stream.default_encoding = "latin-1"
         try:
             lgr.warning(
-                "Retrying dcm2niix conversion with UTF-8 error replacement "
+                "Retrying dcm2niix conversion with latin-1 encoding "
                 "(non-UTF-8 characters in dcm2niix output)"
             )
             convertnode = Node(Dcm2niix(from_file=fromfile), name="convert")
@@ -935,7 +936,6 @@ def nipype_convert(
             convertnode.inputs.bids_format = bids_options is not None
             eg = convertnode.run()
         finally:
-            _npsub.Stream._read = _orig_read
             _npsub.Stream.default_encoding = _orig_encoding
 
     # prov information
