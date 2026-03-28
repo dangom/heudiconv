@@ -1163,6 +1163,7 @@ def save_converted_files(
         channel_names_lst = sorted(channel_names)  # also converts to list
 
         ### Loop through the bids_files, set the output name and save files
+        used_basenames: set[str] = set()
         for fl, suffix, bids_file, bids_meta in zip(
             res_files, suffixes, bids_files, bids_metas
         ):
@@ -1194,6 +1195,19 @@ def save_converted_files(
             #   into any of the options above, just add the suffix at the end:
             if this_prefix_basename == prefix_basename:
                 this_prefix_basename += suffix
+
+            # Guard against duplicate names: when multiple dcm2niix output
+            # files map to the same BIDS name (e.g. heterogeneous spectroscopy
+            # data, or multi-volume series with shared EchoTime), append the
+            # dcm2niix suffix to disambiguate.
+            if this_prefix_basename in used_basenames:
+                lgr.warning(
+                    "Duplicate output name '%s' — appending dcm2niix suffix '%s'",
+                    this_prefix_basename,
+                    suffix,
+                )
+                this_prefix_basename += suffix
+            used_basenames.add(this_prefix_basename)
 
             # Finally, form the outname by stitching the directory and outtype:
             outname = op.join(prefix_dirname, this_prefix_basename)
