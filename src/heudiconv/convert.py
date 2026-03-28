@@ -458,14 +458,23 @@ def update_multiecho_name(
     # Get the EchoNumber from json file info.  If not present, use EchoTime.
     if "EchoNumber" in metadata.keys():
         echo_number = metadata["EchoNumber"]
-        assert isinstance(echo_number, int)
+        if not isinstance(echo_number, int):
+            lgr.warning(
+                "EchoNumber is not an int (%r) in %s, skipping echo insertion",
+                echo_number,
+                filename,
+            )
+            return filename
     elif "EchoTime" in metadata.keys():
         echo_number = echo_times.index(metadata["EchoTime"]) + 1
     else:
-        raise KeyError(
-            'Either "EchoNumber" or "EchoTime" must be in metadata keys. '
-            f"Keys detected: {metadata.keys()}"
+        lgr.warning(
+            'Neither "EchoNumber" nor "EchoTime" in metadata for %s '
+            "(keys: %s). Skipping echo insertion.",
+            filename,
+            list(metadata.keys()),
         )
+        return filename
 
     # Determine scan suffix
     filetype = "_" + filename.split("_")[-1]
