@@ -30,6 +30,7 @@ dependencies = [
     "nibabel>=5.3.1",
     "nipype>=1.2.3",
     "pydicom>=1.0.0",
+    "spec2nii>=0.8",
 ]
 
 # Hatchling configuration
