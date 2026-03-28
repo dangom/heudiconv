@@ -455,8 +455,14 @@ def update_multiecho_name(
             f'Argument "echo_times" must be a list, not a {type(echo_times)}'
         )
 
-    # Get the EchoNumber from json file info.  If not present, use EchoTime.
-    if "EchoNumber" in metadata.keys():
+    # Determine echo number.  Prefer EchoTime position in the sorted
+    # echo_times list when available — this is consistent across all files
+    # in a multi-echo series.  EchoNumber from dcm2niix JSON may be absent
+    # on some split files (e.g. dcm2niix reference echoes), causing
+    # collisions when mixed with files that do have it.
+    if "EchoTime" in metadata.keys() and metadata["EchoTime"] in echo_times:
+        echo_number = echo_times.index(metadata["EchoTime"]) + 1
+    elif "EchoNumber" in metadata.keys():
         echo_number = metadata["EchoNumber"]
         if not isinstance(echo_number, int):
             lgr.warning(
@@ -465,8 +471,6 @@ def update_multiecho_name(
                 filename,
             )
             return filename
-    elif "EchoTime" in metadata.keys():
-        echo_number = echo_times.index(metadata["EchoTime"]) + 1
     else:
         lgr.warning(
             'Neither "EchoNumber" nor "EchoTime" in metadata for %s '
@@ -890,7 +894,49 @@ def nipype_convert(
     else:
         convertnode.terminal_output = "allatonce"
     convertnode.inputs.bids_format = bids_options is not None
-    eg = convertnode.run()
+    try:
+        eg = convertnode.run()
+    except UnicodeDecodeError:
+        # dcm2niix may output non-UTF-8 characters (e.g. German umlauts from
+        # GE protocol data).  Nipype hardcodes UTF-8 decoding.  Retry with
+        # lenient encoding by monkey-patching the stream reader.
+        import nipype.utils.subprocess as _npsub
+
+        _orig_encoding = _npsub.Stream.default_encoding
+        _npsub.Stream.default_encoding = "utf-8"
+        # Patch the read method to use errors='replace'
+        _orig_read = _npsub.Stream._read
+
+        def _read_replace(self, drain=0):
+            try:
+                fd = self.fileno
+                buf = os.read(fd, 4096).decode("utf-8", errors="replace")
+                if buf:
+                    self._rows.append(buf)
+                    return buf
+                return None
+            except OSError:
+                return None
+
+        _npsub.Stream._read = _read_replace
+        try:
+            lgr.warning(
+                "Retrying dcm2niix conversion with UTF-8 error replacement "
+                "(non-UTF-8 characters in dcm2niix output)"
+            )
+            convertnode = Node(Dcm2niix(from_file=fromfile), name="convert")
+            convertnode.base_dir = tmpdir
+            convertnode.inputs.source_names = item_dicoms
+            convertnode.inputs.out_filename = (
+                op.basename(prefix) + "_heudiconv%03d" % random.randint(0, 999)
+            )
+            if prefix_dir:
+                convertnode.inputs.output_dir = prefix_dir
+            convertnode.inputs.bids_format = bids_options is not None
+            eg = convertnode.run()
+        finally:
+            _npsub.Stream._read = _orig_read
+            _npsub.Stream.default_encoding = _orig_encoding
 
     # prov information
     prov_file = prefix + "_prov.ttl" if with_prov else None
