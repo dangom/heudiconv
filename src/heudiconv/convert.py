@@ -918,8 +918,14 @@ def nipype_convert(
         # output.  Retry with latin-1 which can decode any byte.
         import nipype.utils.subprocess as _npsub
 
-        _orig_encoding = _npsub.Stream.default_encoding
-        _npsub.Stream.default_encoding = "latin-1"
+        # Patch Stream.__init__ to use latin-1 instead of locale encoding
+        _orig_init = _npsub.Stream.__init__
+
+        def _latin1_init(self, name, impl):
+            _orig_init(self, name, impl)
+            self.default_encoding = "latin-1"
+
+        _npsub.Stream.__init__ = _latin1_init
         try:
             lgr.warning(
                 "Retrying dcm2niix conversion with latin-1 encoding "
@@ -936,7 +942,7 @@ def nipype_convert(
             convertnode.inputs.bids_format = bids_options is not None
             eg = convertnode.run()
         finally:
-            _npsub.Stream.default_encoding = _orig_encoding
+            _npsub.Stream.__init__ = _orig_init
 
     # prov information
     prov_file = prefix + "_prov.ttl" if with_prov else None
