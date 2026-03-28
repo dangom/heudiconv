@@ -667,6 +667,23 @@ def convert(
                     overwrite,
                 )
             elif outtype in ["nii", "nii.gz"]:
+                outname, scaninfo = (prefix + "." + outtype, prefix + scaninfo_suffix)
+
+                # Spectroscopy (mrs/ datatype) uses spec2nii instead of dcm2niix.
+                # NIfTI-MRS format requires spec2nii; dcm2niix cannot produce it.
+                if "/mrs/" in prefix or prefix.startswith("mrs/"):
+                    if not op.exists(outname) or overwrite:
+                        bids_outfiles = spec2nii_convert(
+                            item_dicoms,
+                            prefix,
+                            outtype,
+                            bids_options,
+                            overwrite,
+                        )
+                        if bids_options is not None and bids_outfiles:
+                            save_scans_key(item, bids_outfiles)
+                    continue
+
                 assert converter == "dcm2niix", f"Invalid converter {converter}"
                 due.cite(
                     Doi("10.1016/j.jneumeth.2016.03.001"),
@@ -674,7 +691,6 @@ def convert(
                     description="DICOM to NIfTI + .json sidecar conversion utility",
                     tags=["implementation"],
                 )
-                outname, scaninfo = (prefix + "." + outtype, prefix + scaninfo_suffix)
 
                 if not op.exists(outname) or overwrite:
                     tmpdir = tempdirs("dcm2niix")
@@ -833,6 +849,97 @@ def convert_dicom(
                 #                else:
                 #                    os.link(filename, outfile)
                 shutil.copyfile(filename, outfile)
+
+
+def spec2nii_convert(
+    item_dicoms: list[str],
+    prefix: str,
+    outtype: str,
+    bids_options: Optional[dict[str, str]],
+    overwrite: bool,
+) -> list[str]:
+    """Convert spectroscopy DICOMs to NIfTI-MRS using spec2nii.
+
+    Parameters
+    ----------
+    item_dicoms : list of str
+        Paths to source DICOM files.
+    prefix : str
+        Output path prefix (without extension).
+    outtype : str
+        Output type ("nii" or "nii.gz").
+    bids_options : dict or None
+        BIDS options (if not None, produce JSON sidecars).
+    overwrite : bool
+        Whether to overwrite existing files.
+
+    Returns
+    -------
+    list of str
+        Paths to output JSON sidecar files (for save_scans_key).
+    """
+    import shutil
+    import subprocess
+    import tempfile
+
+    prefix_dir = op.dirname(prefix)
+    prefix_basename = op.basename(prefix)
+    os.makedirs(prefix_dir, exist_ok=True)
+
+    # spec2nii expects a directory of DICOMs.  Create a temp dir with
+    # symlinks so we don't copy data.
+    with tempfile.TemporaryDirectory(prefix="spec2nii") as tmpdir:
+        dicom_dir = op.join(tmpdir, "dicoms")
+        os.makedirs(dicom_dir)
+        for dcm_path in item_dicoms:
+            os.symlink(op.abspath(dcm_path), op.join(dicom_dir, op.basename(dcm_path)))
+
+        cmd = [
+            "spec2nii",
+            "dicom",
+            "-j",  # produce JSON sidecar
+            "-o",
+            prefix_dir,
+            "-f",
+            prefix_basename,
+            dicom_dir,
+        ]
+        lgr.info("Running spec2nii: %s", " ".join(cmd))
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            if result.stdout:
+                lgr.debug("spec2nii stdout: %s", result.stdout.strip())
+        except FileNotFoundError:
+            lgr.error(
+                "spec2nii not found. Install it with: pip install spec2nii"
+            )
+            return []
+        except subprocess.CalledProcessError as e:
+            lgr.warning(
+                "spec2nii failed (exit %d): %s\n%s",
+                e.returncode,
+                e.stdout,
+                e.stderr,
+            )
+            return []
+
+    # Collect output files.  spec2nii may produce multiple files for
+    # multi-voxel data; collect all JSON sidecars.
+    import glob as _glob
+
+    bids_outfiles = sorted(_glob.glob(f"{prefix}*.json"))
+    nii_files = sorted(_glob.glob(f"{prefix}*.nii*"))
+    lgr.info(
+        "spec2nii produced %d NIfTI-MRS and %d JSON files",
+        len(nii_files),
+        len(bids_outfiles),
+    )
+    return bids_outfiles
 
 
 def _is_unicode_error(exc: BaseException) -> bool:
