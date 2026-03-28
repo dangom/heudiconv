@@ -527,9 +527,27 @@ def get_reproducible_int(dicom_list: list[str]) -> int:
     if acquisition_number:
         return int(acquisition_number)
 
-    raise AssertionError(
-        "No metadata found that can be used to sort DICOMs reproducibly. Was header information erased?"
+    # Last resort: use SeriesNumber as a stable ordering key.
+    # Some anonymization tools strip all temporal metadata but leave
+    # SeriesNumber intact.
+    series_number = dicom.get("SeriesNumber")
+    if series_number is not None:
+        lgr.warning(
+            "No date/time or AcquisitionNumber in %s — falling back to "
+            "SeriesNumber (%s) for reproducible ordering.",
+            dicom_list[0],
+            series_number,
+        )
+        return int(series_number)
+
+    # Fall back to epoch 0 rather than crashing.  The ordering won't be
+    # reproducible but conversion can still proceed.
+    lgr.warning(
+        "No metadata found for reproducible DICOM sorting in %s. "
+        "Using epoch 0 — output ordering may not be stable.",
+        dicom_list[0],
     )
+    return 0
 
 
 def get_datetime_from_dcm(dcm_data: dcm.FileDataset) -> Optional[datetime.datetime]:

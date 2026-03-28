@@ -484,7 +484,13 @@ def save_scans_key(
 
     """
     rows = {}
-    assert bids_files, "we do expect some files since it was called"
+    if not bids_files:
+        lgr.warning(
+            "save_scans_key called but no BIDS files were found. "
+            "This may happen when dcm2niix output was not parsed correctly "
+            "(e.g., warning text concatenated with the Convert line)."
+        )
+        return
     # we will need to deduce subject and session from the bids_filename
     # and if there is a conflict, we would just blow since this function
     # should be invoked only on a result of a single item conversion as far
