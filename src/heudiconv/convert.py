@@ -1038,6 +1038,16 @@ def nipype_convert(
                 "Retrying dcm2niix conversion with latin-1 encoding "
                 "(non-UTF-8 characters in dcm2niix output)"
             )
+            # The first run completed dcm2niix successfully (the error was
+            # in nipype reading stdout), so output files exist in prefix_dir.
+            # Remove them to avoid duplicates from the retry.
+            _first_out = convertnode.inputs.out_filename
+            if prefix_dir and _first_out:
+                import glob as _glob
+
+                for _stale in _glob.glob(op.join(prefix_dir, _first_out + "*")):
+                    lgr.debug("Removing first-run output before retry: %s", _stale)
+                    os.remove(_stale)
             convertnode = Node(Dcm2niix(from_file=fromfile), name="convert")
             convertnode.base_dir = tmpdir
             convertnode.inputs.source_names = item_dicoms
