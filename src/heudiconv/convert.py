@@ -955,6 +955,32 @@ def _is_unicode_error(exc: BaseException) -> bool:
     return False
 
 
+try:
+    from nipype.interfaces.dcm2nii import Dcm2niix as _BaseDcm2niix
+except ImportError:
+    _BaseDcm2niix = None  # type: ignore[assignment,misc]
+
+
+if _BaseDcm2niix is not None:
+
+    class _FixedDcm2niix(_BaseDcm2niix):  # type: ignore[misc]
+        """Dcm2niix with fixed stdout parsing.
+
+        dcm2niix sometimes concatenates warning text on the same line as
+        Convert output (e.g. "Warning: ...Convert 150 DICOM as ...").
+        Nipype's _parse_stdout requires "Convert " at the start of the line.
+        This subclass splits such lines before the base parser runs.
+
+        Defined at module level so Nipype can pickle the interface for caching.
+        """
+
+        def _parse_stdout(self, stdout: str) -> list[str]:
+            stdout = re.sub(
+                r"(?i)(warning[^.]*\.)(Convert )", r"\1\n\2", stdout
+            )
+            return super()._parse_stdout(stdout)
+
+
 def nipype_convert(
     item_dicoms: list[str],
     prefix: str,
@@ -997,19 +1023,7 @@ def nipype_convert(
     if fromfile:
         lgr.info("Using custom config file %s", fromfile)
 
-    dcm2niix_interface = Dcm2niix(from_file=fromfile)
-
-    # Monkey-patch _parse_stdout to handle dcm2niix warning text
-    # concatenated with Convert lines (e.g. "Warning: ...Convert 150 DICOM").
-    # Nipype's parser requires "Convert " at the start of the line.
-    _orig_parse = dcm2niix_interface._parse_stdout
-
-    def _patched_parse_stdout(stdout: str) -> list[str]:
-        # Split lines where warnings are concatenated with Convert output
-        fixed = re.sub(r"(?i)(warning[^.]*\.)(Convert )", r"\1\n\2", stdout)
-        return _orig_parse(fixed)
-
-    dcm2niix_interface._parse_stdout = _patched_parse_stdout
+    dcm2niix_interface = _FixedDcm2niix(from_file=fromfile)
 
     convertnode = Node(dcm2niix_interface, name="convert")
     convertnode.base_dir = tmpdir
@@ -1062,7 +1076,7 @@ def nipype_convert(
                 for _stale in _glob.glob(op.join(prefix_dir, _first_out + "*")):
                     lgr.debug("Removing first-run output before retry: %s", _stale)
                     os.remove(_stale)
-            convertnode = Node(Dcm2niix(from_file=fromfile), name="convert")
+            convertnode = Node(_FixedDcm2niix(from_file=fromfile), name="convert")
             convertnode.base_dir = tmpdir
             convertnode.inputs.source_names = item_dicoms
             convertnode.inputs.out_filename = (
