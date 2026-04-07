@@ -323,15 +323,12 @@ def json_dumps_pretty(j: Any, indent: int = 2, sort_keys: bool = True) -> str:
     )
     # uniform no spaces before ]
     js_ = re.sub(r" *\]", "]", js_)
-    # uniform spacing before numbers
-    # But that thing could screw up dates within strings which would have 2 spaces
-    # in a date like Mar  3 2017, so we do negative lookahead to avoid changing
-    # in those cases
-    # import pdb; pdb.set_trace()
+    # uniform spacing before numbers inside arrays
+    # Only match numbers preceded by [ or , (array context) to avoid
+    # collapsing double spaces inside string values (e.g. addresses)
     js_ = re.sub(
-        r"(?<!\w{3})"  # negative lookbehind for the month
-        r'  *("?[-+.0-9e]+"?)'
-        r"(?! [123]\d{3})"  # negative lookahead for a year
+        r"(?<=[\[,])"  # must be preceded by [ or , (array context)
+        r" +([-+]?[0-9]+\.?[0-9]*(?:[eE][-+]?[0-9]+)?)"
         r"(?P<space> ?)[ \n]*",
         r" \1\g<space>",
         js_,
