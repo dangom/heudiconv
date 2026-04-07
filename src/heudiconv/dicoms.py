@@ -181,6 +181,11 @@ def validate_dicom(
     Parse DICOM attributes. Returns None if not valid.
     """
     mw = dw.wrapper_from_file(fl, force=True, stop_before_pixels=True)
+    # Filter early to avoid crashes with XA multi-planar DICOMs
+    # that fail during signature cleaning or attribute extraction
+    if dcmfilter is not None and dcmfilter(mw.dcm_data):
+        lgr.warning("Ignoring %s because of DICOM filter", fl)
+        return None
     # Workaround for protocol name in private siemens csa header
     if not getattr(mw.dcm_data, "ProtocolName", "").strip():
         mw.dcm_data.ProtocolName = (
@@ -194,9 +199,6 @@ def validate_dicom(
         series_id = (int(mw.dcm_data.SeriesNumber), protocol_name)
     except AttributeError as e:
         lgr.warning('Ignoring %s since not quite a "normal" DICOM: %s', fl, e)
-        return None
-    if dcmfilter is not None and dcmfilter(mw.dcm_data):
-        lgr.warning("Ignoring %s because of DICOM filter", fl)
         return None
     if mw.dcm_data[0x0008, 0x0016].repval in (
         "Raw Data Storage",
