@@ -826,7 +826,8 @@ def find_compatible_fmaps_for_run(
             else:
                 # allow for tiny differences between the affines etc
                 compatible = all(
-                    np.allclose(x, y) for x, y in zip(json_info[param], fm_info)
+                    np.allclose(x, y, rtol=0.05)
+                    for x, y in zip(json_info[param], fm_info)
                 )
             if not compatible:
                 continue  # don't bother checking more params
