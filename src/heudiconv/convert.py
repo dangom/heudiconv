@@ -1214,7 +1214,10 @@ def save_converted_files(
             safe_movefile(bvecs_src, outname_bvecs, overwrite)
             safe_movefile(bvals_src, outname_bvals, overwrite)
 
-        if prefix.endswith("dwi"):
+        # DWI-derived maps (trace, ADC, etc.) live in dwi/ with non-zero
+        # b-values and legitimately need bvec/bval files.
+        _dwi_suffixes = ("dwi", "trace", "ADC")
+        if any(prefix.endswith(s) for s in _dwi_suffixes):
             rename_files()
         else:
             if bvals_are_zero(bvals):
