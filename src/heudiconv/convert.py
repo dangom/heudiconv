@@ -997,7 +997,21 @@ def nipype_convert(
     if fromfile:
         lgr.info("Using custom config file %s", fromfile)
 
-    convertnode = Node(Dcm2niix(from_file=fromfile), name="convert")
+    dcm2niix_interface = Dcm2niix(from_file=fromfile)
+
+    # Monkey-patch _parse_stdout to handle dcm2niix warning text
+    # concatenated with Convert lines (e.g. "Warning: ...Convert 150 DICOM").
+    # Nipype's parser requires "Convert " at the start of the line.
+    _orig_parse = dcm2niix_interface._parse_stdout
+
+    def _patched_parse_stdout(stdout: str) -> list[str]:
+        # Split lines where warnings are concatenated with Convert output
+        fixed = re.sub(r"(?i)(warning[^.]*\.)(Convert )", r"\1\n\2", stdout)
+        return _orig_parse(fixed)
+
+    dcm2niix_interface._parse_stdout = _patched_parse_stdout
+
+    convertnode = Node(dcm2niix_interface, name="convert")
     convertnode.base_dir = tmpdir
     convertnode.inputs.source_names = item_dicoms
     convertnode.inputs.out_filename = op.basename(
